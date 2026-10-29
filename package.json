@@ -1,0 +1,26 @@
+{
+  "name": "ecoturismo-inteligente",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build -w frontend",
+    "test": "npm run test -w backend",
+    "check": "npm run check -w backend",
+    "verify:integrations": "npm run verify:integrations -w backend",
+    "test:e2e": "playwright test",
+    "db:check": "npm run db:check -w backend",
+    "mail:verify": "npm run mail:verify -w backend",
+    "mail:test": "npm run mail:test -w backend"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  }
+}

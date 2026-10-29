@@ -1,0 +1,31 @@
+{
+  "name": "ecoturismo-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/database.js && node --check src/integrations.js && node --check src/places.js && node --check src/passwordReset.js && node --check src/migrations.js && node --check src/rateLimit.js && node --check src/admin.js && node --check src/adminDatabase.js && node --check src/adminSessions.js && node --check scripts/verify-mail.js",
+    "verify:integrations": "node scripts/verify-integrations.js",
+    "db:check": "node scripts/check-database.js",
+    "mail:verify": "node scripts/verify-mail.js",
+    "mail:test": "node scripts/verify-mail.js --send",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.24.6",
+    "nodemailer": "^10.2.1"
+  },
+  "devDependencies": {
+    "smtp-server": "^3.21.1"
+  }
+}
