@@ -1,10 +1,13 @@
 import 'dotenv/config';
 import mysql from 'mysql2/promise';
+import {readFile} from 'node:fs/promises';
 
 // Diagnóstico de solo lectura: nunca muestra filas de usuarios, hashes ni tokens.
 let connection;
 try {
- connection=await mysql.createConnection({host:process.env.DB_HOST||'127.0.0.1',port:Number(process.env.DB_PORT||3306),user:process.env.DB_USER||'root',password:process.env.DB_PASSWORD||'',database:process.env.DB_NAME||'ecoturismo_db'});
+ const caPath=process.env.DB_SSL_CA_PATH?.trim();
+ const ssl=caPath?{ca:await readFile(caPath),rejectUnauthorized:true,verifyIdentity:true}:undefined;
+ connection=await mysql.createConnection({host:process.env.DB_HOST||'127.0.0.1',port:Number(process.env.DB_PORT||3306),user:process.env.DB_USER||'root',password:process.env.DB_PASSWORD||'',database:process.env.DB_NAME||'ecoturismo_db',...(ssl?{ssl}:{})});
  const [[info]]=await connection.query('SELECT DATABASE() AS database_name,VERSION() AS server_version');console.log(JSON.stringify(info));
  const required=['users','destinations','trips','trip_stops','trip_segments','site_notices','password_reset_tokens'];
  for(const table of required){
@@ -28,5 +31,5 @@ try {
   if(!foreignKeys.some(f=>f.TABLE_NAME===table&&f.COLUMN_NAME===column&&f.REFERENCED_TABLE_NAME===parent)){console.log(`PENDIENTE: FK ${table}.${column} -> ${parent}.id`);process.exitCode=1;}
  }
 } catch {
- console.error('No se pudo comprobar MySQL. Revisa DB_HOST, DB_PORT, DB_USER, DB_PASSWORD y DB_NAME en backend/.env.');process.exitCode=1;
+ console.error('No se pudo comprobar MySQL. Revisa DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME y DB_SSL_CA_PATH en backend/.env.');process.exitCode=1;
 } finally {if(connection)await connection.end();}

@@ -1,12 +1,22 @@
 import 'dotenv/config';
 import mysql from 'mysql2/promise';
 import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import {migrate} from './migrations.js';
 
-// Conexión a MariaDB/MySQL de XAMPP. La base se crea sola la primera vez y
-// queda disponible en phpMyAdmin (http://localhost/phpmyadmin).
+// XAMPP crea la base local; Aiven puede usar una base existente con TLS.
 const DB_NAME = process.env.DB_NAME || 'ecoturismo_db';
 if (!/^[A-Za-z0-9_]+$/.test(DB_NAME)) throw new Error('DB_NAME solo puede contener letras, números y guiones bajos.');
+const skipCreate = process.env.DB_SKIP_CREATE === 'true';
+const caPath = process.env.DB_SSL_CA_PATH?.trim();
+let ssl;
+if (caPath) {
+  try {
+    ssl = { ca: await readFile(caPath), rejectUnauthorized: true, verifyIdentity: true };
+  } catch (error) {
+    throw new Error(`No se pudo leer el certificado CA indicado en DB_SSL_CA_PATH. Revisa la ruta y los permisos (${error.code || 'error de lectura'}).`);
+  }
+}
 
 const connectionConfig = {
   host: process.env.DB_HOST || '127.0.0.1',
@@ -15,17 +25,20 @@ const connectionConfig = {
   password: process.env.DB_PASSWORD || '',
   charset: 'utf8mb4',
   dateStrings: true,
-  decimalNumbers: true
+  decimalNumbers: true,
+  ...(ssl ? { ssl } : {})
 };
 
-let admin;
-try {
-  admin = await mysql.createConnection(connectionConfig);
-  await admin.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-} catch (error) {
-  throw new Error(`No se pudo conectar a MySQL/MariaDB en ${connectionConfig.host}:${connectionConfig.port}. Inicia MySQL desde el panel de XAMPP y revisa backend/.env. Detalle: ${error.message}`);
-} finally {
-  if (admin) await admin.end();
+if (!skipCreate) {
+  let admin;
+  try {
+    admin = await mysql.createConnection(connectionConfig);
+    await admin.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+  } catch (error) {
+    throw new Error(`No se pudo conectar o crear la base MySQL/MariaDB en ${connectionConfig.host}:${connectionConfig.port}. Revisa backend/.env y el servicio MySQL (XAMPP en local). Para una base existente sin permiso de creación, usa DB_SKIP_CREATE=true. Detalle: ${error.message}`);
+  } finally {
+    if (admin) await admin.end();
+  }
 }
 
 export const pool = mysql.createPool({
@@ -36,6 +49,14 @@ export const pool = mysql.createPool({
   queueLimit: 0,
   enableKeepAlive: true
 });
+
+// El pool es perezoso: valida conexión, TLS y acceso a la base antes del DDL.
+try {
+  await pool.query('SELECT 1');
+} catch (error) {
+  await pool.end();
+  throw new Error(`No se pudo acceder a la base ${DB_NAME} en ${connectionConfig.host}:${connectionConfig.port}. Revisa DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME y DB_SSL_CA_PATH; con DB_SKIP_CREATE=true la base debe existir. Detalle: ${error.message}`);
+}
 
 const schemaSql = `
 CREATE TABLE IF NOT EXISTS users (

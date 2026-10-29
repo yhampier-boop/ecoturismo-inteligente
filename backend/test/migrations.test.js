@@ -19,6 +19,7 @@ test('migraciones en base nueva y reejecución sin perder usuarios ni viajes',as
    import {migrate} from './src/migrations.js';
    const id='00000000-0000-0000-0000-000000000001';
    await createUser({id,name:'Migración',email:'migration@example.test',passwordHash:'solo-prueba'});
+   await pool.query("UPDATE destinations SET description='Descripción existente: no sobrescribir' WHERE id='cusco'");
    const trip=await writeTrip({userId:id,title:'Vuelo conservado',startDate:'2027-01-01',endDate:'2027-01-03',mode:'flight',stops:[{destination_id:'lima'},{destination_id:'cusco'}]});
    await migrate(pool,process.env.DB_NAME);
    const [[user]]=await pool.query('SELECT COUNT(*) AS n FROM users');assert.equal(user.n,1);
@@ -29,6 +30,18 @@ test('migraciones en base nueva y reejecución sin perder usuarios ni viajes',as
   `;
   const {stdout}=await promisify(execFile)(process.execPath,['--input-type=module','-e',script],{env:{...process.env,DB_NAME:name},timeout:30_000});
   assert.match(stdout,/migration-ok/);
+  // Un reinicio sobre una base existente tampoco debe reemplazar datos del catálogo.
+  const restart=`
+   import assert from 'node:assert/strict';
+   import {pool} from './src/database.js';
+   const [[user]]=await pool.query('SELECT password_hash FROM users WHERE id=?',['00000000-0000-0000-0000-000000000001']);
+   assert.equal(user.password_hash,'solo-prueba');
+   const [[trip]]=await pool.query('SELECT title FROM trips');assert.equal(trip.title,'Vuelo conservado');
+   const [[destination]]=await pool.query("SELECT description FROM destinations WHERE id='cusco'");
+   assert.equal(destination.description,'Descripción existente: no sobrescribir');
+   await pool.end();
+  `;
+  await promisify(execFile)(process.execPath,['--input-type=module','-e',restart],{env:{...process.env,DB_NAME:name,DB_SKIP_CREATE:'true'},timeout:30_000});
  } finally {
   await admin.query(`DROP DATABASE IF EXISTS \`${name}\``);
   await admin.end();
